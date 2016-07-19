@@ -4,10 +4,11 @@ Created on Jun 8, 2016
 @author: kumaran
 '''
 import sys
-from Tix import ROW
 sys.path.append('/home/kumaran/git/PyNMRSTAR')
 import bmrb,csv
 import json
+from Bio.PDB import *
+
 class StarToNef(object):
     '''
     classdocs
@@ -23,6 +24,20 @@ class StarToNef(object):
         #bmrb.enable_nef_defaults()
         self.nefData=bmrb.Entry.from_scratch('test01')
         self.read_map_file('/home/kumaran/nef2start.csv')
+        self.get_standards()
+        
+    def get_standards(self):
+        pdb_parser=PDBParser(QUIET=True)
+        aa_names=pdb_parser.get_structure('aa_name','/home/kumaran/nef/aa_normal_20.pdb')
+        self.bmrb_standard={}
+        for m in aa_names:
+            for c in m:
+                for r in c:
+                    atm=[]
+                    for a in r:
+                        atm.append(a.name)
+                    self.bmrb_standard[r.resname]=atm
+     
     
     def nef_sf_category(self,star_sf_category):
         try:
@@ -72,17 +87,385 @@ class StarToNef(object):
         if nef_tag=="":nef_tag="MISSING"
         return nef_tag
     
+    
+    def nef_to_nmrstar(self,nef_file):
+        self.nefData=bmrb.Entry.from_file(nef_file)
+        self.starData=bmrb.Entry.from_scratch(self.nefData.bmrb_id)
+        for saveframe in self.nefData:
+            #ssf_name=self.star_sf_category(saveframe.name)
+            sf=bmrb.Saveframe.from_scratch(saveframe.name)
+            for tag in saveframe.tags:
+                n_tag="%s.%s"%(saveframe.tag_prefix,tag[0])
+                s_tag=self.star_tag(n_tag)
+                if s_tag!="MISSING" and s_tag!="":
+                    if s_tag.split(".")[1]=="Sf_category":
+                        ssf_name=self.star_sf_category(tag[1])
+                        sf.add_tag(s_tag,ssf_name)
+                    else:
+                        sf.add_tag(s_tag,tag[1])
+            for loop in saveframe:
+                ll=bmrb.Loop.from_scratch()
+                missing_col=[]
+                for coln in loop.columns:
+                    nl_tag="%s.%s"%(loop.category,coln)
+                    sl_tag=self.star_tag(nl_tag)
+                    if sl_tag!="MISSING" and sl_tag!="":
+                        ll.add_column(sl_tag)
+                    else:
+                        missing_col.append(loop.columns.index(coln))
+                if loop.category=="_nef_chemical_shift":
+                    ll.add_column('_Atom_chem_shift.Ambiguity_code')
+                        
+                if loop.category=="_nef_chemical_shift":
+                    res_pos=loop.columns.index('residue_type')
+                    atm_pos=loop.columns.index('atom_name')
+                if loop.category=="_nef_distance_restraint":
+                    ll.add_column('_Gen_dist_constraint.Member_logic_code')
+                if loop.category=="_nef_distance_restraint":
+                    res_pos1=loop.columns.index('residue_type_1')
+                    atm_pos1=loop.columns.index('atom_name_1')
+                    res_pos2=loop.columns.index('residue_type_2')
+                    atm_pos2=loop.columns.index('atom_name_2')
+                for dat in loop.data:
+                    dat2=dat
+                    if loop.category=="_nef_distance_restraint":
+                        dat2.append(".")
+                        
+                        if "X" in dat[atm_pos2] or "Y" in dat[atm_pos2] or "%" in dat[atm_pos2] or "X" in dat[atm_pos1] or "Y" in dat[atm_pos1] or "%"  in dat[atm_pos1]:
+                            if ("X" in dat[atm_pos1] or "Y" in dat[atm_pos1] or "%" in dat[atm_pos1]):
+                                atm1=dat2[atm_pos1]
+                                atm1=atm1.replace("X","")
+                                atm1=atm1.replace("Y","")
+                                atm1=atm1.replace("%","")
+                                atm_list1=[i for i in self.bmrb_standard[dat[res_pos1]] if atm1 in i]
+                            if ("X" in dat[atm_pos2] or "Y" in dat[atm_pos2] or "%" in dat[atm_pos2]):
+                                atm2=dat2[atm_pos2]
+                                atm2=atm2.replace("X","")
+                                atm2=atm2.replace("Y","")
+                                atm2=atm2.replace("%","")
+                                atm_list2=[i for i in self.bmrb_standard[dat[res_pos2]] if atm2 in i]
+                            stereo_atms=["X","Y"]
+                            # % -
+                            if "%" in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1]  and "%" not in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                for aa1 in atm_list1:
+                                    dat2[atm_pos1]=aa1
+                                    dat2[-1]="OR"
+                                    ll.add_data(dat2[:])
+                            # - %
+                            elif "%" not in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1]  and "%"  in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                for aa2 in atm_list2:
+                                    dat2[atm_pos2]=aa2
+                                    dat2[-1]="OR"
+                                    ll.add_data(dat2[:])
+                            # XY - 
+                            elif "%" not in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1])  and "%" not in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                for s_atm in stereo_atms:
+                                    s_pos1=dat2[atm_pos1].find(s_atm)
+                                    if s_pos1>=0: dat2[atm_pos1]=atm_list1[stereo_atms.index(s_atm)]
+                                dat2[-1]="OR"
+                                ll.add_data(dat2[:])
+                            # - XY
+                            elif "%" not in dat2[atm_pos1] and "X"  not in dat2[atm_pos1] and "Y"  not in dat2[atm_pos1]  and "%" not in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                for s_atm in stereo_atms:
+                                    s_pos2=dat2[atm_pos2].find(s_atm)
+                                    if s_pos2>=0: dat2[atm_pos2]=atm_list2[stereo_atms.index(s_atm)]
+                                dat2[-1]="OR"
+                                ll.add_data(dat2[:])   
+                            # % %               
+                            elif "%" in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1]  and "%" in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                for aa1 in atm_list1:
+                                    for aa2 in atm_list2:
+                                        dat2[atm_pos1]=aa1
+                                        dat2[atm_pos2]=aa2
+                                        dat2[-1]="OR"
+                                        ll.add_data(dat2[:])
+                            # XY XY       
+                            elif "%" not in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1])  and "%" not in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                for s_atm in stereo_atms:
+                                    s_pos1=dat2[atm_pos1].find(s_atm)
+                                    if s_pos1>=0: dat2[atm_pos1]=atm_list1[stereo_atms.index(s_atm)]
+                                    s_pos2=dat2[atm_pos2].find(s_atm)
+                                    if s_pos2>=0: dat2[atm_pos2]=atm_list2[stereo_atms.index(s_atm)]
+                                dat2[-1]="OR"
+                                ll.add_data(dat2[:])
+                            # XY% -
+                            elif "%" in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1])  and "%" not in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                if "X" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="1":
+                                            dat2[atm_pos1]=aa1
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="2":
+                                            dat2[atm_pos1]=aa1
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                            # - XY%
+                            elif "%" not in dat2[atm_pos1] and "X"  not in dat2[atm_pos1] and  "Y"  not in dat2[atm_pos1]   and "%"  in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                if "X" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="1":
+                                            dat2[atm_pos2]=aa2
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="2":
+                                            dat2[atm_pos2]=aa2
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                            # XY XY%
+                            elif "%" not in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1]) and "%"  in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                for s_atm in stereo_atms:
+                                    s_pos1=dat2[atm_pos1].find(s_atm)
+                                    if s_pos1>=0: dat2[atm_pos1]=atm_list1[stereo_atms.index(s_atm)]
+                                if "X" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="1":
+                                            dat2[atm_pos2]=aa2
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="2":
+                                            dat2[atm_pos2]=aa2
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                                    
+                            #XY% XY
+                            elif "%"  in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1]) and "%" not in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                for s_atm in stereo_atms:
+                                    s_pos2=dat2[atm_pos2].find(s_atm)
+                                    if s_pos2>=0: dat2[atm_pos2]=atm_list2[stereo_atms.index(s_atm)]
+                                if "X" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="1":
+                                            dat2[atm_pos1]=aa1
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="2":
+                                            dat2[atm_pos1]=aa1
+                                            dat2[-1]="OR"
+                                            ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                            
+                            # % XY
+                            elif "%" in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1] and "%" not in dat2[atm_pos2] and ("X" in dat2[atm_pos2] or "Y" in dat2[atm_pos2]):
+                                for s_atm in stereo_atms:
+                                    s_pos2=dat2[atm_pos2].find(s_atm)
+                                    if s_pos2>=0: dat2[atm_pos2]=atm_list2[stereo_atms.index(s_atm)]
+                                for aa1 in atm_list1:
+                                    dat2[atm_pos1]=aa1
+                                    dat2[-1]="OR"
+                                    ll.add_data(dat2[:])
+                            # XY %
+                            elif "%" not in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1]) and "%"  in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                for s_atm in stereo_atms:
+                                    s_pos1=dat2[atm_pos1].find(s_atm)
+                                    if s_pos1>=0: dat2[atm_pos1]=atm_list1[stereo_atms.index(s_atm)]
+                                for aa2 in atm_list2:
+                                    dat2[atm_pos2]=aa2
+                                    dat2[-1]="OR"
+                                    ll.add_data(dat2[:])
+                            #XY% %
+                            elif "%" in dat2[atm_pos1] and ("X" in dat2[atm_pos1] or "Y" in dat2[atm_pos1]) and "%" in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
+                                if "X" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="1":
+                                            dat2[atm_pos1]=aa1
+                                            for aa2 in atm_list2:
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos1]:
+                                    for aa1 in atm_list1:
+                                        s_pos1=dat2[atm_pos1].find("X")
+                                        if aa1[s_pos1]=="2":
+                                            dat2[atm_pos1]=aa1
+                                            for aa2 in atm_list2:
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                                
+                            # % XY%
+                            elif "%" in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1] and "%" in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                if "X" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="1":
+                                            dat2[atm_pos2]=aa2
+                                            for aa1 in atm_list1:
+                                                dat2[atm_pos1]=aa1
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos2]:
+                                    for aa2 in atm_list2:
+                                        s_pos2=dat2[atm_pos2].find("X")
+                                        if aa2[s_pos2]=="2":
+                                            dat2[atm_pos2]=aa2
+                                            for aa1 in atm_list1:
+                                                dat2[atm_pos1]=aa1
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                                
+                                    
+                                
+                            
+                            # XY% XY%
+                            elif "%" in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1])  and "%"  in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
+                                #print dat2
+                                if "X" in dat2[atm_pos1] and "X" in dat2[atm_pos2]:
+                                    s_pos1=dat2[atm_pos1].find("X")
+                                    s_pos2=dat2[atm_pos2].find("X")
+                                    for aa1 in atm_list1:
+                                        for aa2 in atm_list2:
+                                            if aa1[s_pos1]=="1" and aa2[s_pos2]=="1":
+                                                dat2[atm_pos1]=aa1
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos1] and "X" in dat2[atm_pos2]:
+                                    s_pos1=dat2[atm_pos1].find("Y")
+                                    s_pos2=dat2[atm_pos2].find("X")
+                                    for aa1 in atm_list1:
+                                        for aa2 in atm_list2:
+                                            if aa1[s_pos1]=="2" and aa2[s_pos2]=="1":
+                                                dat2[atm_pos1]=aa1
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                elif "X" in dat2[atm_pos1] and "Y" in dat2[atm_pos2]:
+                                    s_pos1=dat2[atm_pos1].find("X")
+                                    s_pos2=dat2[atm_pos2].find("Y")
+                                    for aa1 in atm_list1:
+                                        for aa2 in atm_list2:
+                                            if aa1[s_pos1]=="1" and aa2[s_pos2]=="2":
+                                                dat2[atm_pos1]=aa1
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos1] and "Y" in dat2[atm_pos2]:
+                                    s_pos1=dat2[atm_pos1].find("Y")
+                                    s_pos2=dat2[atm_pos2].find("Y")
+                                    for aa1 in atm_list1:
+                                        for aa2 in atm_list2:
+                                            if aa1[s_pos1]=="2" and aa2[s_pos2]=="2":
+                                                dat2[atm_pos1]=aa1
+                                                dat2[atm_pos2]=aa2
+                                                dat2[-1]="OR"
+                                                ll.add_data(dat2[:])
+                                else:
+                                    print "Failed",dat2
+                                #print dat2
+                            else:
+                                print "Failed",dat2
+                        else:
+                            ll.add_data(dat2[:])
+                    
+                    elif loop.category=="_nef_chemical_shift":
+                        dat2.append("1")
+                        if "X" in dat[atm_pos] or "Y" in dat[atm_pos] or "%" in dat[atm_pos]:
+                            atm=dat2[atm_pos]
+                            atm=atm.replace("X","")
+                            atm=atm.replace("Y","")
+                            atm=atm.replace("%","")
+                            #print atm
+                            atm_list=[i for i in self.bmrb_standard[dat[res_pos]] if atm in i]
+                            if (dat[res_pos]=="PHE" or dat[res_pos]=="TYR") and ("HD" in atm_list[0] or "HE" in atm_list[0]):
+                                amb_code='3'
+                            else:
+                                amb_code='2'
+                            if "%" in  dat2[atm_pos] and "X" not in dat2[atm_pos] and "Y" not in dat2[atm_pos]:
+                                for aa in atm_list:
+                                    dat2[atm_pos]=aa
+                                    dat2[-1]=amb_code
+                                    ll.add_data(dat2[:])
+                                    #print ll
+                            elif "%" not in  dat2[atm_pos] and ("X" in dat2[atm_pos] or "Y"  in dat2[atm_pos]):
+                                if "X" in dat2[atm_pos]:
+                                    dat2[atm_pos]=atm_list[0]
+                                elif "Y" in dat2[atm_pos]:
+                                    dat2[atm_pos]=atm_list[1]
+                                else:
+                                    dat2[atm_pos]="XXX"
+                                dat2[-1]=amb_code
+                                ll.add_data(dat2[:])
+                            elif "%"  in  dat2[atm_pos] and ("X" in dat2[atm_pos] or "Y"  in dat2[atm_pos]):
+                                if "X" in dat2[atm_pos]:
+                                    X_pos=dat2[atm_pos].find("X")
+                                    for aa in atm_list:
+                                        if aa[X_pos]=="1":
+                                            dat2[atm_pos]=aa
+                                            dat2[-1]=amb_code
+                                            ll.add_data(dat2[:])
+                                elif "Y" in dat2[atm_pos]:
+                                    Y_pos=dat2[atm_pos].find("Y")
+                                    for aa in atm_list:
+                                        if aa[Y_pos]=="2":
+                                            dat2[atm_pos]=aa
+                                            dat2[-1]=amb_code
+                                            ll.add_data(dat2[:])
+                                else:
+                                    dat2[atm_pos]="XXX"
+                                    dat2[-1]=amb_code
+                                    ll.add_data(dat2[:])
+                                            
+                                        
+                                
+                            else:
+                                ll.add_data(dat2[:])
+                        else:
+                            ll.add_data(dat2[:])
+                    else:
+                        for i in missing_col: del(dat2[i])
+                        ll.add_data(dat2[:])
+                #print ll
+                
+                    
+                    
+                    
+                sf.add_loop(ll) 
+            self.starData.add_saveframe(sf)
+        print self.starData
+            
+    
     def read_nef_file(self,nef_file):
         self.starData=bmrb.Entry.from_file(nef_file)
+        print self.starData.bmrb_id
         for saveframe in self.starData:
-            #print "saveframe",saveframe.name,self.star_sf_category(saveframe.name)
+            print "saveframe",saveframe.name,self.star_sf_category(saveframe.name)
             for t in saveframe.tags:
                 sf_tag="%s.%s"%(saveframe.tag_prefix,t[0])
-                print "saveframeTag",t[0],self.star_tag(sf_tag)
+                print "saveframeTag"+","+sf_tag+","+self.star_tag(sf_tag)
             for loop in saveframe:
                 for coln in loop.columns:
                     loop_tag="%s.%s"%(loop.category,coln)
-                    print "loop_tag",loop_tag,self.star_tag(loop_tag)
+                    print "loopTag(Columns)"+","+loop_tag+","+self.star_tag(loop_tag)
+            print "================End of Saveframe==============="
     
     def read_star_file(self,star_file):
         self.starData=bmrb.Entry.from_database(star_file)
@@ -172,7 +555,12 @@ class StarToNef(object):
         
 if __name__=="__main__":
     #p=StarToNef('15060')
+    fname=sys.argv[1]
     p=StarToNef()
-    #p.read_nef_file('/home/kumaran/nef/CCPN_H1GI.nef')
-    p.read_nef_file('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
+    
+    p.nef_to_nmrstar(fname)
+    #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_H1GI.nef')
+    #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
+    #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2lci_Piscataway_179.nef')
+    #p.read_nef_file('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
     #p.read_nef_file('/home/kumaran/nef/CCPN_2lci_Piscataway_179.nef')
