@@ -8,8 +8,10 @@ sys.path.append('/home/kumaran/git/PyNMRSTAR')
 import bmrb,csv
 import json
 from Bio.PDB import *
+import ntpath
 
 class StarToNef(object):
+    
     '''
     classdocs
     '''
@@ -450,7 +452,13 @@ class StarToNef(object):
                     
                 sf.add_loop(ll) 
             self.starData.add_saveframe(sf)
-        print self.starData
+        (file_path,file_name)=ntpath.split(nef_file)
+        if file_path=="": file_path="."
+        out_file_name="%s.str"%(file_name.split(".nef")[0])
+        outfile=file_path+"/"+out_file_name
+        with open(outfile,'w') as strfile:
+            strfile.write(str(self.starData))
+
             
     
     def read_nef_file(self,nef_file):
