@@ -89,10 +89,131 @@ class StarToNef(object):
         if nef_tag=="":nef_tag="MISSING"
         return nef_tag
     
+    def nmrstar_to_nef(self,star_file):
+        self.starData=bmrb.Entry.from_file(star_file)
+        self.nefData=bmrb.Entry.from_scratch(self.starData.entry_id)
+        for saveframe in self.starData:
+            sf=bmrb.Saveframe.from_scratch(saveframe.name)
+            for tag in saveframe.tags:
+                s_tag="%s.%s"%(saveframe.tag_prefix,tag[0])
+                n_tag=self.nef_tag(s_tag)
+                if n_tag!="MISSING" and n_tag!="":
+                    if n_tag.split(".")[1]=="sf_category":
+                        nsf_name=self.nef_sf_category(tag[1])
+                        #print n_tag,nsf_name
+                        sf.add_tag(n_tag,nsf_name)
+                    else:
+                        sf.add_tag(n_tag,tag[1])
+            for loop in saveframe:
+                ll=bmrb.Loop.from_scratch()
+                missing_col=[]
+                for coln in loop.columns:
+                    sl_tag="%s.%s"%(loop.category,coln)
+                    nl_tag=self.nef_tag(sl_tag)
+                    if nl_tag!="MISSING" and nl_tag!="":
+                        ll.add_column(nl_tag)
+                    else:
+                        missing_col.append(loop.columns.index(coln))
+                    
+                if loop.category=="_Atom_chem_shift":
+                    res_pos=loop.columns.index('Auth_comp_ID')
+                    atm_pos=loop.columns.index('Auth_atom_ID')
+                if loop.category=="_Gen_dist_constraint":
+                    res_pos1=loop.columns.index('Auth_comp_ID_1')
+                    atm_pos1=loop.columns.index('Auth_atom_ID_1')
+                    res_pos2=loop.columns.index('Auth_comp_ID_2')
+                    atm_pos2=loop.columns.index('Auth_atom_ID_2')
+                
+                    
+                
+                for dat in loop.data:
+                    dat2=dat
+                    
+                    if loop.category=="_Atom_chem_shift":
+                        res=dat[res_pos]
+                        atm=dat[atm_pos]
+                        amb_id=loop.columns.index("Ambiguity_code")
+                        
+                        if dat2[amb_id]!='1':
+                            amb_atm=[i for i in self.bmrb_standard[res] if atm[:-1] in i]
+                            if (len(amb_atm)==2 and res!="TYR" and res!="PHE") or  (len(amb_atm)==2 and (res=="TYR" or res=="PHE") and atm[:-1]=="HB"):
+                                if amb_atm.index(atm)==0:
+                                    dat2[atm_pos]="%sX"%(atm[:-1])
+                                elif amb_atm.index(atm)==1:
+                                    dat2[atm_pos]="%sY"%(atm[:-1])
+                                else:
+                                    print "Something wrong1"
+                                ll.add_data(dat2[:-1])
+                            elif len(amb_atm)==3 or (len(amb_atm)==2 and (res=="TYR" or res=="PHE")):
+                                dat2[atm_pos]="%s%%"%(atm[:-1])
+                                if dat2[:-1] not in ll.data:
+                                    ll.add_data(dat2[:-1])
+                            else:
+                                print "Something wrong2"
+                        else:
+                            ll.add_data(dat2[:-1])
+                    elif loop.category=="_Gen_dist_constraint":
+                        res1=dat[res_pos1]
+                        atm1=dat[atm_pos1]
+                        res2=dat[res_pos2]
+                        atm2=dat[atm_pos2]
+                        logic_col=loop.columns.index("Member_logic_code")
+                        if len(atm1[:-1])>1:
+                            amb_atm1=[i for i in self.bmrb_standard[res1] if atm1[:-1] in i]
+                        else:
+                            amb_atm1=[]
+                        if len(atm2[:-1])>1:
+                            amb_atm2=[i for i in self.bmrb_standard[res2] if atm2[:-1] in i]
+                        else:
+                            amb_atm2=[]
+                        if dat2[logic_col]=="OR":
+                            if (len(amb_atm1)==2 and res1!="TYR" and res1!="PHE") or  (len(amb_atm1)==2 and (res1=="TYR" or res1=="PHE") and atm1[:-1]=="HB"):
+                                if amb_atm1.index(atm1)==0:
+                                    dat2[atm_pos1]="%sX"%(atm1[:-1])
+                                elif amb_atm1.index(atm1)==1:
+                                    dat2[atm_pos1]="%sY"%(atm1[:-1])
+                                else:
+                                    print "Something wrong1"
+                                
+                            if (len(amb_atm2)==2 and res2!="TYR" and res2!="PHE") or  (len(amb_atm2)==2 and (res2=="TYR" or res2=="PHE") and atm2[:-1]=="HB"):
+                                if amb_atm2.index(atm2)==0:
+                                    dat2[atm_pos2]="%sX"%(atm2[:-1])
+                                elif amb_atm2.index(atm2)==1:
+                                    dat2[atm_pos2]="%sY"%(atm2[:-1])
+                                else:
+                                    print "Something wrong1"
+                                    
+                            
+                            if len(amb_atm1)==3 or (len(amb_atm1)==2 and (res1=="TYR" or res1=="PHE")):
+                                dat2[atm_pos1]="%s%%"%(atm1[:-1])
+                                
+                            if len(amb_atm2)==3 or (len(amb_atm2)==2 and (res2=="TYR" or res2=="PHE")):
+                                dat2[atm_pos2]="%s%%"%(atm2[:-1])
+                                
+                            if len(amb_atm1)==3 or len(amb_atm2)==3 or len(amb_atm1)==2 or len(amb_atm2)==2:
+                                for i in missing_col: del(dat2[i])
+                                if dat2[:] not in ll.data:
+                                    ll.add_data(dat2[:])
+                            else:
+                                print "no way"
+                        else:
+                            for i in missing_col: del(dat2[i])
+                            ll.add_data(dat2[:])
+                    else:
+                        for i in missing_col: del(dat2[i])
+                        ll.add_data(dat2[:])
+                        #ll.add_data(dat2[:])
+                        
+                        
+                sf.add_loop(ll)
+            self.nefData.add_saveframe(sf)
+        print self.nefData
+                
+    
     
     def nef_to_nmrstar(self,nef_file):
         self.nefData=bmrb.Entry.from_file(nef_file)
-        self.starData=bmrb.Entry.from_scratch(self.nefData.bmrb_id)
+        self.starData=bmrb.Entry.from_scratch(self.nefData.entry_id)
         for saveframe in self.nefData:
             #ssf_name=self.star_sf_category(saveframe.name)
             sf=bmrb.Saveframe.from_scratch(saveframe.name)
@@ -565,8 +686,8 @@ if __name__=="__main__":
     #p=StarToNef('15060')
     fname=sys.argv[1]
     p=StarToNef()
-    
-    p.nef_to_nmrstar(fname)
+    p.nmrstar_to_nef(fname)
+    #p.nef_to_nmrstar(fname)
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_H1GI.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2lci_Piscataway_179.nef')
