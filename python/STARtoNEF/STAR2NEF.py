@@ -25,7 +25,7 @@ class StarToNef(object):
         #bmrb.enableNEFDefaults()
         #bmrb.enable_nef_defaults()
         self.nefData=bmrb.Entry.from_scratch('test01')
-        self.read_map_file('/home/kumaran/share/nef/nef2star.csv')
+        self.read_map_file('/home/kumaran/nef/nef2star.csv')
         self.get_standards()
         self.star2nef_atm_map={
                                'ALA':{'HB1':'HB%',
@@ -61,8 +61,8 @@ class StarToNef(object):
                                       'HG21':'HG2%',
                                       'HG22':'HG2%',
                                       'HG23':'HG2%'},
-                               'LEU':{'CD1':'CD%',
-                                      'CD2':'CD%',
+                               'LEU':{'CD1':'CDX',
+                                      'CD2':'CDY',
                                       'HB2':'HBX',
                                       'HB3':'HBY',
                                       'HD11':'HDX%',
@@ -119,8 +119,8 @@ class StarToNef(object):
                                       'HD2':'HD%',
                                       'HE1':'HE%',
                                       'HE2':'HE%'},
-                               'VAL':{'CG1':'CG%',
-                                      'CG2':'CG%',
+                               'VAL':{'CG1':'CGX',
+                                      'CG2':'CGY',
                                       'HG11':'HGX%',
                                       'HG12':'HGX%',
                                       'HG13':'HGX%',
@@ -131,7 +131,7 @@ class StarToNef(object):
         
     def get_standards(self):
         pdb_parser=PDBParser(QUIET=True)
-        aa_names=pdb_parser.get_structure('aa_name','/home/kumaran/share/nef/aa_normal_20.pdb')
+        aa_names=pdb_parser.get_structure('aa_name','/home/kumaran/nef/aa_normal_20.pdb')
         self.bmrb_standard={}
         for m in aa_names:
             for c in m:
@@ -290,7 +290,13 @@ class StarToNef(object):
                         
                 sf.add_loop(ll)
             self.nefData.add_saveframe(sf)
-        print self.nefData
+        (file_path,file_name)=ntpath.split(star_file)
+        if file_path=="": file_path="."
+        out_file_name="%s_.nef"%(file_name.split(".str")[0])
+        outfile=file_path+"/"+out_file_name
+        with open(outfile,'w') as neffile:
+            neffile.write(str(self.nefData))
+        #print self.nefData
                 
     
     
@@ -397,15 +403,15 @@ class StarToNef(object):
                             # XY% -
                             elif "%" in dat2[atm_pos1] and ("X"  in dat2[atm_pos1] or "Y"  in dat2[atm_pos1])  and "%" not in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
                                 if "X" in dat2[atm_pos1]:
+                                    s_pos1=dat2[atm_pos1].find("X")
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
                                         if aa1[s_pos1]=="1":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
+                                    s_pos1=dat2[atm_pos1].find("Y")
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("Y")
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
@@ -415,15 +421,16 @@ class StarToNef(object):
                             # - XY%
                             elif "%" not in dat2[atm_pos1] and "X"  not in dat2[atm_pos1] and  "Y"  not in dat2[atm_pos1]   and "%"  in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
                                 if "X" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("X")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
                                         if aa2[s_pos2]=="1":
+                                            #print dat2,s_pos2
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("Y")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
@@ -436,15 +443,15 @@ class StarToNef(object):
                                     s_pos1=dat2[atm_pos1].find(s_atm)
                                     if s_pos1>=0: dat2[atm_pos1]=atm_list1[stereo_atms.index(s_atm)]
                                 if "X" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("X")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
                                         if aa2[s_pos2]=="1":
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("Y")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
@@ -458,15 +465,15 @@ class StarToNef(object):
                                     s_pos2=dat2[atm_pos2].find(s_atm)
                                     if s_pos2>=0: dat2[atm_pos2]=atm_list2[stereo_atms.index(s_atm)]
                                 if "X" in dat2[atm_pos1]:
+                                    s_pos1=dat2[atm_pos1].find("X")
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
                                         if aa1[s_pos1]=="1":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
-                                    for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("Y")
+                                    s_pos1=dat2[atm_pos1].find("Y")
+                                    for aa1 in atm_list1: 
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
@@ -495,8 +502,8 @@ class StarToNef(object):
                             #XY% %
                             elif "%" in dat2[atm_pos1] and ("X" in dat2[atm_pos1] or "Y" in dat2[atm_pos1]) and "%" in dat2[atm_pos2] and "X" not in dat2[atm_pos2] and "Y" not in dat2[atm_pos2]:
                                 if "X" in dat2[atm_pos1]:
+                                    s_pos1=dat2[atm_pos1].find("X")
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
                                         if aa1[s_pos1]=="1":
                                             dat2[atm_pos1]=aa1
                                             for aa2 in atm_list2:
@@ -504,8 +511,8 @@ class StarToNef(object):
                                                 dat2[-1]="OR"
                                                 ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
+                                    s_pos1=dat2[atm_pos1].find("Y")
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("Y")
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             for aa2 in atm_list2:
@@ -518,8 +525,8 @@ class StarToNef(object):
                             # % XY%
                             elif "%" in dat2[atm_pos1] and "X" not in dat2[atm_pos1] and "Y" not in dat2[atm_pos1] and "%" in dat2[atm_pos2] and ("X"  in dat2[atm_pos2] or "Y"  in dat2[atm_pos2]):
                                 if "X" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("X")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
                                         if aa2[s_pos2]=="1":
                                             dat2[atm_pos2]=aa2
                                             for aa1 in atm_list1:
@@ -527,8 +534,8 @@ class StarToNef(object):
                                                 dat2[-1]="OR"
                                                 ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
+                                    s_pos2=dat2[atm_pos2].find("Y")
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             for aa1 in atm_list1:
@@ -658,7 +665,7 @@ class StarToNef(object):
             self.starData.add_saveframe(sf)
         (file_path,file_name)=ntpath.split(nef_file)
         if file_path=="": file_path="."
-        out_file_name="%s.str"%(file_name.split(".nef")[0])
+        out_file_name="%s_.str"%(file_name.split(".nef")[0])
         outfile=file_path+"/"+out_file_name
         with open(outfile,'w') as strfile:
             strfile.write(str(self.starData))
@@ -769,8 +776,10 @@ if __name__=="__main__":
     #p=StarToNef('15060')
     fname=sys.argv[1]
     p=StarToNef()
-    p.nmrstar_to_nef(fname)
-    #p.nef_to_nmrstar(fname)
+    if fname.split(".")[-1]=="str":
+        p.nmrstar_to_nef(fname)
+    else:
+        p.nef_to_nmrstar(fname)
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_H1GI.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2lci_Piscataway_179.nef')
