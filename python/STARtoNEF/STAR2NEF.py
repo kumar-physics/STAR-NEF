@@ -25,12 +25,113 @@ class StarToNef(object):
         #bmrb.enableNEFDefaults()
         #bmrb.enable_nef_defaults()
         self.nefData=bmrb.Entry.from_scratch('test01')
-        self.read_map_file('/home/kumaran/nef2start.csv')
+        self.read_map_file('/home/kumaran/share/nef/nef2star.csv')
         self.get_standards()
+        self.star2nef_atm_map={
+                               'ALA':{'HB1':'HB%',
+                                       'HB2':'HB%',
+                                       'HB3':'HB%'},
+                               'ARG':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD2':'HDX',
+                                      'HD3':'HDY',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'ASN':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'ASP':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'GLN':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'GLU':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'GLY':{'HA2':'HAX',
+                                      'HA3':'HAY'},
+                                'HIS':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'ILE':{'HD11':'HD1%',
+                                      'HD12':'HD1%',
+                                      'HD13':'HD1%',
+                                      'HG12':'HG1X',
+                                      'HG13':'HG1Y',
+                                      'HG21':'HG2%',
+                                      'HG22':'HG2%',
+                                      'HG23':'HG2%'},
+                               'LEU':{'CD1':'CD%',
+                                      'CD2':'CD%',
+                                      'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD11':'HDX%',
+                                      'HD12':'HDX%',
+                                      'HD13':'HDX%',
+                                      'HD21':'HDY%',
+                                      'HD22':'HDY%',
+                                      'HD23':'HDY%'},
+                               'LYS':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD2':'HDX',
+                                      'HD3':'HDY',
+                                      'HE2':'HEX',
+                                      'HE3':'HEY',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'MET':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HE1':'HE%',
+                                      'HE2':'HE%',
+                                      'HE3':'HE%',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'PHE':{'CD1':'CD%',
+                                      'CD2':'CD%',
+                                      'CE1':'CE%',
+                                      'CE2':'CE%',
+                                      'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD1':'HD%',
+                                      'HD2':'HD%',
+                                      'HE1':'HE%',
+                                      'HE2':'HE%'},
+                               'PRO':{'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD2':'HDX',
+                                      'HD3':'HDY',
+                                      'HG2':'HGX',
+                                      'HG3':'HGY'},
+                               'SER':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'THR':{'HG21':'HG2%',
+                                      'HG22':'HG2%',
+                                      'HG23':'HG2%'},
+                               'TRP':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'TYR':{'CD1':'CD%',
+                                      'CD2':'CD%',
+                                      'CE1':'CE%',
+                                      'CE2':'CE%',
+                                      'HB2':'HBX',
+                                      'HB3':'HBY',
+                                      'HD1':'HD%',
+                                      'HD2':'HD%',
+                                      'HE1':'HE%',
+                                      'HE2':'HE%'},
+                               'VAL':{'CG1':'CG%',
+                                      'CG2':'CG%',
+                                      'HG11':'HGX%',
+                                      'HG12':'HGX%',
+                                      'HG13':'HGX%',
+                                      'HG21':'HGY%',
+                                      'HG22':'HGY%',
+                                      'HG23':'HGY%'}
+                               }
         
     def get_standards(self):
         pdb_parser=PDBParser(QUIET=True)
-        aa_names=pdb_parser.get_structure('aa_name','/home/kumaran/nef/aa_normal_20.pdb')
+        aa_names=pdb_parser.get_structure('aa_name','/home/kumaran/share/nef/aa_normal_20.pdb')
         self.bmrb_standard={}
         for m in aa_names:
             for c in m:
@@ -39,6 +140,18 @@ class StarToNef(object):
                     for a in r:
                         atm.append(a.name)
                     self.bmrb_standard[r.resname]=atm
+                    
+    def ambiguity_code_dict(self,star_dat):
+        dat_dict=star_dat.get_tags(['_Atom_chem_shift.Auth_seq_ID', '_Atom_chem_shift.Auth_comp_ID', '_Atom_chem_shift.Auth_atom_ID','_Atom_chem_shift.Ambiguity_code'])
+        n=len(dat_dict.values()[0])
+        amb_dict={}
+        for i in range(n):
+            atm_key="%s-%s-%s"%(dat_dict['_Atom_chem_shift.Auth_seq_ID'][i],dat_dict['_Atom_chem_shift.Auth_comp_ID'][i],dat_dict['_Atom_chem_shift.Auth_atom_ID'][i])
+            atm_val=dat_dict['_Atom_chem_shift.Ambiguity_code'][i]
+            amb_dict[atm_key]=atm_val
+            
+        return amb_dict
+            
      
     
     def nef_sf_category(self,star_sf_category):
@@ -92,6 +205,7 @@ class StarToNef(object):
     def nmrstar_to_nef(self,star_file):
         self.starData=bmrb.Entry.from_file(star_file)
         self.nefData=bmrb.Entry.from_scratch(self.starData.entry_id)
+        self.amb_dict=self.ambiguity_code_dict(self.starData)
         for saveframe in self.starData:
             sf=bmrb.Saveframe.from_scratch(saveframe.name)
             for tag in saveframe.tags:
@@ -116,6 +230,7 @@ class StarToNef(object):
                         missing_col.append(loop.columns.index(coln))
                     
                 if loop.category=="_Atom_chem_shift":
+                    res_no_pos=loop.columns.index('Auth_seq_ID')
                     res_pos=loop.columns.index('Auth_comp_ID')
                     atm_pos=loop.columns.index('Auth_atom_ID')
                 if loop.category=="_Gen_dist_constraint":
@@ -133,75 +248,43 @@ class StarToNef(object):
                         res=dat[res_pos]
                         atm=dat[atm_pos]
                         amb_id=loop.columns.index("Ambiguity_code")
-                        
+                        #print res_no,res,atm,dat[amb_id],self.amb_dict["%s-%s-%s"%(res_no,res,atm)]
                         if dat2[amb_id]!='1':
-                            amb_atm=[i for i in self.bmrb_standard[res] if atm[:-1] in i]
-                            if (len(amb_atm)==2 and res!="TYR" and res!="PHE") or  (len(amb_atm)==2 and (res=="TYR" or res=="PHE") and atm[:-1]=="HB"):
-                                if amb_atm.index(atm)==0:
-                                    dat2[atm_pos]="%sX"%(atm[:-1])
-                                elif amb_atm.index(atm)==1:
-                                    dat2[atm_pos]="%sY"%(atm[:-1])
-                                else:
-                                    print "Something wrong1"
-                                ll.add_data(dat2[:-1])
-                            elif len(amb_atm)==3 or (len(amb_atm)==2 and (res=="TYR" or res=="PHE")):
-                                dat2[atm_pos]="%s%%"%(atm[:-1])
-                                if dat2[:-1] not in ll.data:
-                                    ll.add_data(dat2[:-1])
-                            else:
-                                print "Something wrong2"
+                            dat2[atm_pos]=self.star2nef_atm_map[res][atm]
+                            for i in missing_col: del(dat2[i])
+                            if dat2[:] not in ll.data:
+                                ll.add_data(dat2[:])
+                            
                         else:
-                            ll.add_data(dat2[:-1])
+                            for i in missing_col: del(dat2[i])
+                            ll.add_data(dat2[:])
+
                     elif loop.category=="_Gen_dist_constraint":
                         res1=dat[res_pos1]
                         atm1=dat[atm_pos1]
                         res2=dat[res_pos2]
                         atm2=dat[atm_pos2]
                         logic_col=loop.columns.index("Member_logic_code")
-                        if len(atm1[:-1])>1:
-                            amb_atm1=[i for i in self.bmrb_standard[res1] if atm1[:-1] in i]
-                        else:
-                            amb_atm1=[]
-                        if len(atm2[:-1])>1:
-                            amb_atm2=[i for i in self.bmrb_standard[res2] if atm2[:-1] in i]
-                        else:
-                            amb_atm2=[]
                         if dat2[logic_col]=="OR":
-                            if (len(amb_atm1)==2 and res1!="TYR" and res1!="PHE") or  (len(amb_atm1)==2 and (res1=="TYR" or res1=="PHE") and atm1[:-1]=="HB"):
-                                if amb_atm1.index(atm1)==0:
-                                    dat2[atm_pos1]="%sX"%(atm1[:-1])
-                                elif amb_atm1.index(atm1)==1:
-                                    dat2[atm_pos1]="%sY"%(atm1[:-1])
-                                else:
-                                    print "Something wrong1"
-                                
-                            if (len(amb_atm2)==2 and res2!="TYR" and res2!="PHE") or  (len(amb_atm2)==2 and (res2=="TYR" or res2=="PHE") and atm2[:-1]=="HB"):
-                                if amb_atm2.index(atm2)==0:
-                                    dat2[atm_pos2]="%sX"%(atm2[:-1])
-                                elif amb_atm2.index(atm2)==1:
-                                    dat2[atm_pos2]="%sY"%(atm2[:-1])
-                                else:
-                                    print "Something wrong1"
-                                    
-                            
-                            if len(amb_atm1)==3 or (len(amb_atm1)==2 and (res1=="TYR" or res1=="PHE")):
-                                dat2[atm_pos1]="%s%%"%(atm1[:-1])
-                                
-                            if len(amb_atm2)==3 or (len(amb_atm2)==2 and (res2=="TYR" or res2=="PHE")):
-                                dat2[atm_pos2]="%s%%"%(atm2[:-1])
-                                
-                            if len(amb_atm1)==3 or len(amb_atm2)==3 or len(amb_atm1)==2 or len(amb_atm2)==2:
-                                for i in missing_col: del(dat2[i])
-                                if dat2[:] not in ll.data:
-                                    ll.add_data(dat2[:])
-                            else:
-                                print "no way"
+                            try:
+                                dat2[atm_pos1]=self.star2nef_atm_map[res1][atm1]
+                            except KeyError:
+                                pass
+                            try:
+                                dat2[atm_pos2]=self.star2nef_atm_map[res2][atm2]
+                            except KeyError:
+                                pass
+                            for i in missing_col: del(dat2[i])
+                            if dat2[:] not in ll.data:
+                                ll.add_data(dat2[:])
                         else:
                             for i in missing_col: del(dat2[i])
-                            ll.add_data(dat2[:])
+                            if dat2[:] not in ll.data:
+                                ll.add_data(dat2[:])
                     else:
                         for i in missing_col: del(dat2[i])
-                        ll.add_data(dat2[:])
+                        if dat2[:] not in ll.data:
+                            ll.add_data(dat2[:])
                         #ll.add_data(dat2[:])
                         
                         
@@ -322,7 +405,7 @@ class StarToNef(object):
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
+                                        s_pos1=dat2[atm_pos1].find("Y")
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
@@ -340,7 +423,7 @@ class StarToNef(object):
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
+                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
@@ -361,7 +444,7 @@ class StarToNef(object):
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
+                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             dat2[-1]="OR"
@@ -383,7 +466,7 @@ class StarToNef(object):
                                             ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
+                                        s_pos1=dat2[atm_pos1].find("Y")
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             dat2[-1]="OR"
@@ -422,7 +505,7 @@ class StarToNef(object):
                                                 ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos1]:
                                     for aa1 in atm_list1:
-                                        s_pos1=dat2[atm_pos1].find("X")
+                                        s_pos1=dat2[atm_pos1].find("Y")
                                         if aa1[s_pos1]=="2":
                                             dat2[atm_pos1]=aa1
                                             for aa2 in atm_list2:
@@ -445,7 +528,7 @@ class StarToNef(object):
                                                 ll.add_data(dat2[:])
                                 elif "Y" in dat2[atm_pos2]:
                                     for aa2 in atm_list2:
-                                        s_pos2=dat2[atm_pos2].find("X")
+                                        s_pos2=dat2[atm_pos2].find("Y")
                                         if aa2[s_pos2]=="2":
                                             dat2[atm_pos2]=aa2
                                             for aa1 in atm_list1:
