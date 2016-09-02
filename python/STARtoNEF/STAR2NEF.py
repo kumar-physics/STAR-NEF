@@ -25,7 +25,7 @@ class StarToNef(object):
         #bmrb.enableNEFDefaults()
         #bmrb.enable_nef_defaults()
         self.nefData=bmrb.Entry.from_scratch('test01')
-        self.read_map_file('/home/kumaran/nef/nef2star.csv')
+        self.read_map_file('/home/kumaran/nef/NEF_NMR-STAR_equivalence_20160829.csv')
         self.get_standards()
         self.star2nef_atm_map={
                                'ALA':{'HB1':'HB%',
@@ -38,13 +38,19 @@ class StarToNef(object):
                                       'HG2':'HGX',
                                       'HG3':'HGY'},
                                'ASN':{'HB2':'HBX',
-                                      'HB3':'HBY'},
+                                      'HB3':'HBY',
+                                      'HD21':'HD2X',
+                                      'HD22':'HD2Y'},
                                'ASP':{'HB2':'HBX',
+                                      'HB3':'HBY'},
+                               'CYS':{'HB2':'HBX',
                                       'HB3':'HBY'},
                                'GLN':{'HB2':'HBX',
                                       'HB3':'HBY',
                                       'HG2':'HGX',
-                                      'HG3':'HGY'},
+                                      'HG3':'HGY',
+                                      'HE21':'HE2X',
+                                      'HE22':'HE2Y'},
                                'GLU':{'HB2':'HBX',
                                       'HB3':'HBY',
                                       'HG2':'HGX',
@@ -224,6 +230,7 @@ class StarToNef(object):
                 for coln in loop.columns:
                     sl_tag="%s.%s"%(loop.category,coln)
                     nl_tag=self.nef_tag(sl_tag)
+                    #print nl_tag
                     if nl_tag!="MISSING" and nl_tag!="":
                         ll.add_column(nl_tag)
                     else:
@@ -231,13 +238,33 @@ class StarToNef(object):
                     
                 if loop.category=="_Atom_chem_shift":
                     res_no_pos=loop.columns.index('Auth_seq_ID')
-                    res_pos=loop.columns.index('Auth_comp_ID')
-                    atm_pos=loop.columns.index('Auth_atom_ID')
+                    if "Comp_ID" in loop.columns:
+                        res_pos=loop.columns.index('Comp_ID')
+                    else:
+                        res_pos=loop.columns.index('Auth_comp_ID')
+                    if "Atom_ID" in loop.columns:
+                        atm_pos=loop.columns.index('Atom_ID')
+                    else:
+                        atm_pos=loop.columns.index('Auth_atom_ID')
                 if loop.category=="_Gen_dist_constraint":
-                    res_pos1=loop.columns.index('Auth_comp_ID_1')
-                    atm_pos1=loop.columns.index('Auth_atom_ID_1')
-                    res_pos2=loop.columns.index('Auth_comp_ID_2')
-                    atm_pos2=loop.columns.index('Auth_atom_ID_2')
+                    if "Comp_ID_1" in loop.columns:
+                         res_pos1=loop.columns.index('Comp_ID_1')
+                    else:
+                         res_pos1=loop.columns.index('Auth_comp_ID_1')
+                    if "Comp_ID_2" in loop.columns:
+                         res_pos2=loop.columns.index('Comp_ID_2')
+                    else:
+                         res_pos2=loop.columns.index('Auth_comp_ID_2')
+                    if "Atom_ID_1" in loop.columns:
+                         atm_pos1=loop.columns.index('Atom_ID_1')
+                    else:
+                         atm_pos1=loop.columns.index('Auth_atom_ID_1')
+                    if "Atom_ID_2" in loop.columns:
+                         atm_pos2=loop.columns.index('Atom_ID_2')
+                    else:
+                         atm_pos2=loop.columns.index('Auth_atom_ID_2')
+                         
+                    
                 
                     
                 
@@ -248,16 +275,20 @@ class StarToNef(object):
                         res=dat[res_pos]
                         atm=dat[atm_pos]
                         amb_id=loop.columns.index("Ambiguity_code")
+                        #print amb_id
                         #print res_no,res,atm,dat[amb_id],self.amb_dict["%s-%s-%s"%(res_no,res,atm)]
                         if dat2[amb_id]!='1':
+                            #print loop.columns
+                            #print dat2,atm,dat2[atm_pos]
                             dat2[atm_pos]=self.star2nef_atm_map[res][atm]
-                            for i in missing_col: del(dat2[i])
-                            if dat2[:] not in ll.data:
+                            dat2=[dat2[i] for i in range(len(dat2)) if i not in missing_col]
+                            if dat2[:] not in ll.data and len(dat2)!=0:
                                 ll.add_data(dat2[:])
                             
                         else:
-                            for i in missing_col: del(dat2[i])
-                            ll.add_data(dat2[:])
+                            dat2=[dat2[i] for i in range(len(dat2)) if i not in missing_col]
+                            if dat2[:] not in ll.data and len(dat2)!=0:
+                                ll.add_data(dat2[:])
 
                     elif loop.category=="_Gen_dist_constraint":
                         res1=dat[res_pos1]
@@ -274,22 +305,24 @@ class StarToNef(object):
                                 dat2[atm_pos2]=self.star2nef_atm_map[res2][atm2]
                             except KeyError:
                                 pass
-                            for i in missing_col: del(dat2[i])
-                            if dat2[:] not in ll.data:
+                            dat2=[dat2[i] for i in range(len(dat2)) if i not in missing_col]
+                            if dat2[:] not in ll.data and len(dat2)!=0:
                                 ll.add_data(dat2[:])
                         else:
-                            for i in missing_col: del(dat2[i])
-                            if dat2[:] not in ll.data:
+                            dat2=[dat2[i] for i in range(len(dat2)) if i not in missing_col]
+                            if dat2[:] not in ll.data and len(dat2)!=0:
                                 ll.add_data(dat2[:])
                     else:
-                        for i in missing_col: del(dat2[i])
-                        if dat2[:] not in ll.data:
+                        dat2=[dat2[i] for i in range(len(dat2)) if i not in missing_col]
+                        if dat2[:] not in ll.data and len(dat2)!=0:
                             ll.add_data(dat2[:])
                         #ll.add_data(dat2[:])
                         
-                        
-                sf.add_loop(ll)
-            self.nefData.add_saveframe(sf)
+                if len(ll.data)!=0:   
+                    sf.add_loop(ll)
+            if sf.tag_prefix is not None:
+                self.nefData.add_saveframe(sf)
+        #print self.nefData
         (file_path,file_name)=ntpath.split(star_file)
         if file_path=="": file_path="."
         out_file_name="%s_.nef"%(file_name.split(".str")[0])
@@ -776,10 +809,15 @@ if __name__=="__main__":
     #p=StarToNef('15060')
     fname=sys.argv[1]
     p=StarToNef()
-    if fname.split(".")[-1]=="str":
-        p.nmrstar_to_nef(fname)
-    else:
-        p.nef_to_nmrstar(fname)
+    print len(p.map),len(p.map[0]),len(p.map[1]),len(p.map[2])
+    for i in range(len(p.map[0])):
+        if p.map[1][i]!=p.map[2][i]:
+            print p.map[0][i],p.map[1][i],p.map[2][i]
+    
+    #if fname.split(".")[-1]=="str":
+    #    p.nmrstar_to_nef(fname)
+    #else:
+    #    p.nef_to_nmrstar(fname)
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_H1GI.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2l9r_Paris_155.nef')
     #p.nef_to_nmrstar('/home/kumaran/nef/CCPN_2lci_Piscataway_179.nef')
